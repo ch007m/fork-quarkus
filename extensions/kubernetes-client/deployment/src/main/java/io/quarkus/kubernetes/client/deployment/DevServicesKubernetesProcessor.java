@@ -64,6 +64,7 @@ import io.quarkus.kubernetes.client.runtime.internal.KubernetesClientBuildConfig
 import io.quarkus.kubernetes.client.runtime.internal.KubernetesDevServicesBuildTimeConfig;
 import io.quarkus.kubernetes.client.runtime.internal.KubernetesDevServicesBuildTimeConfig.Flavor;
 import io.quarkus.kubernetes.client.spi.KubernetesDevServiceInfoBuildItem;
+import io.quarkus.kubernetes.client.spi.KubernetesDevServiceRequestBuildItem;
 import io.quarkus.runtime.configuration.ConfigUtils;
 
 @BuildSteps(onlyIfNot = IsNormal.class, onlyIf = { DevServicesConfig.Enabled.class, NoQuarkusTestKubernetesClient.class })
@@ -92,7 +93,8 @@ public class DevServicesKubernetesProcessor {
             CuratedApplicationShutdownBuildItem closeBuildItem,
             LoggingSetupBuildItem loggingSetupBuildItem,
             DevServicesConfig devServicesConfig,
-            BuildProducer<KubernetesDevServiceInfoBuildItem> devServicesKube) {
+            BuildProducer<KubernetesDevServiceInfoBuildItem> devServicesKube,
+            BuildProducer<KubernetesDevServiceRequestBuildItem> devServiceKubeRequest) {
 
         KubernetesDevServiceCfg configuration = getConfiguration(kubernetesClientBuildTimeConfig);
 
@@ -112,7 +114,8 @@ public class DevServicesKubernetesProcessor {
             devService = startKubernetes(dockerStatusBuildItem, configuration, launchMode,
                     !devServicesSharedNetworkBuildItem.isEmpty(),
                     devServicesConfig.timeout(),
-                    devServicesKube);
+                    devServicesKube,
+                    devServiceKubeRequest);
             if (devService == null) {
                 compressor.closeAndDumpCaptured();
             } else {
@@ -166,7 +169,8 @@ public class DevServicesKubernetesProcessor {
     @SuppressWarnings("unchecked")
     private RunningDevService startKubernetes(DockerStatusBuildItem dockerStatusBuildItem, KubernetesDevServiceCfg config,
             LaunchModeBuildItem launchMode, boolean useSharedNetwork, Optional<Duration> timeout,
-            BuildProducer<KubernetesDevServiceInfoBuildItem> devServicesKube) {
+            BuildProducer<KubernetesDevServiceInfoBuildItem> devServicesKube,
+            BuildProducer<KubernetesDevServiceRequestBuildItem> devServiceKubeRequest) {
         if (!config.devServicesEnabled) {
             // explicitly disabled
             log.debug("Not starting Dev Services for Kubernetes, as it has been disabled in the config.");
@@ -240,6 +244,8 @@ public class DevServicesKubernetesProcessor {
 
             devServicesKube
                     .produce(new KubernetesDevServiceInfoBuildItem(container.getKubeconfig(), container.getContainerId()));
+            devServiceKubeRequest
+                    .produce(new KubernetesDevServiceRequestBuildItem(config.flavor.name()));
 
             return new RunningDevService(Feature.KUBERNETES_CLIENT.getName(), container.getContainerId(),
                     new ContainerShutdownCloseable(container, Feature.KUBERNETES_CLIENT.getName()),
